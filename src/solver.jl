@@ -71,54 +71,57 @@ end
 
 ################################################################################
 # Main finite difference solver
+function solver()
+    vmax = 1.2 # ft/day
+    h = 1.0 # ft, grid step size
+    #k = h/vmax # days, time step size
+    k = 0.01
+    #L = 10.0 # ft, domain
+    #T = 10.0 # days, end time
+    #n = ceil(Int, L/h + 1) # number of space grid points
+    #m = ceil(Int, T/k + 1) # number of time grid points
+    n = 200
+    m = 36500
+    c = Array{Float64}(m,n)
 
-vmax = 1.2 # ft/day
-h = 1.0 # ft, grid step size
-#k = h/vmax # days, time step size
-k = 0.01
-#L = 10.0 # ft, domain
-#T = 10.0 # days, end time
-#n = ceil(Int, L/h + 1) # number of space grid points
-#m = ceil(Int, T/k + 1) # number of time grid points
-n = 200
-m = 36500
-c = Array{Float64}(m,n)
-
-# initial conditions
-for i = 1:n
-    c[1,i] = initial_condition((i-1)*h)
-end
-
-# boundary conditions
-#for j = 1:m
-#    if velocity(0, m-1) > 0
-#        # Do condition 1
-#    else
-#        # Do condition 2
-#    end
-#end
-
-for j = 1:m
-    c[j,1] = 0.0
-    c[j,n] = 0.0
-end
-
-# Main solver
-for i = 2:m
-    for j = 2:n-1
-        x = (j-1)*h
-        t = (i-1)*k
-        coef1 = k*dispersion(x,t)/h^2 - k/(2*h)*(dispersion_grad(x,t) - velocity(x,t))
-        coef2 = 1 - k*velocity_grad(x,t) - 2*k*dispersion(x,t)/h^2
-        coef3 = k*dispersion(x,t)/h^2 + k/(2*h)*(dispersion_grad(x,t) - velocity(x,t))
-        c[i,j] = coef1*c[i-1,j-1] + coef2*c[i-1,j] + coef3*c[i-1,j+1]
+    # initial conditions
+    for i = 1:n
+        c[1,i] = initial_condition((i-1)*h)
     end
+
+    # Main solver
+    for i = 2:m
+        for j = 1:n
+            t = (i-1)*k
+            x = (j-1)*h
+            if j == 1 # x = 0 boundary condition
+                if velocity(x, t) >= 0
+                    c[i,1] = 0.0 # Homogeneous Dirichlet condition
+                else
+                    coef1 = 1.0 - k*velocity_grad(x,t) - 2*k*dispersion(x,t)/h^2
+                    coef2 = 2.0*k*dispersion(x,t)/h^2
+                    c[i,1] = coef1*c[i-1,1] + coef2*c[i-1,2] # Homogeneous Neumann condition
+                end
+            elseif j == n # x = L boundary condition
+                c[i,n] = 0.0
+            else
+                coef1 = k*dispersion(x,t)/h^2 - k/(2*h)*(dispersion_grad(x,t) - velocity(x,t))
+                coef2 = 1 - k*velocity_grad(x,t) - 2*k*dispersion(x,t)/h^2
+                coef3 = k*dispersion(x,t)/h^2 + k/(2*h)*(dispersion_grad(x,t) - velocity(x,t))
+                c[i,j] = coef1*c[i-1,j-1] + coef2*c[i-1,j] + coef3*c[i-1,j+1]
+            end
+        end
+    end
+
+    return c
 end
 ################################################################################
 # Plotting code: This will plot the initial condition and the concentration after
 # 1 year. Loading Gadfly is slow the first time you use it and the first plot
 # is slow the first time you use it.
-using Gadfly # This takes a while to load the first time
-x_plot = linspace(0,200,n) # n uniformly spaced plot points from 0 ft to 200 ft
-plot(x=x_plot, y=c[1,:], Geom.point) # Initial condition
-plot(x=x_plot, y=c[m,:], Geom.point) # Final time
+
+# using Gadfly <- run this in julia to use plot(). Slow to load the first time.
+function plot_concentration(c, k)
+    x_plot = linspace(0,200,n) # n uniformly spaced plot points from 0 ft to 200 ft
+    plot(x=x_plot, y=c[k,:], Geom.point) # concentration at time step k
+end
